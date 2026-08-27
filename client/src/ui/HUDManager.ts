@@ -3,8 +3,9 @@ import { Room, getStateCallbacks } from "@colyseus/sdk";
 
 export class HUDManager {
   readonly text: Phaser.GameObjects.Text;
+  private room?: Room;
 
-  constructor(private scene: Phaser.Scene, private room: Room) {
+  constructor(scene: Phaser.Scene) {
     this.text = scene.add.text(10, 10, "Connecting...", {
       fontFamily: "monospace",
       fontSize: "14px",
@@ -12,21 +13,27 @@ export class HUDManager {
     }).setScrollFactor(0).setDepth(1000);
   }
 
+  attachRoom(room: Room) {
+    this.room = room;
+  }
+
   setStatus(status: string) {
     this.text.setText(status);
   }
 
-  bindState() {
-    const $ = getStateCallbacks(this.room);
-    $(this.room.state).players.onAdd((player: any) => {
+  bindState(room: Room = this.room!) {
+    this.room = room;
+    const $ = getStateCallbacks(room);
+    $(room.state).players.onAdd((player: any) => {
       this.update();
       $(player).onChange(() => this.update());
     });
-    $(this.room.state).players.onRemove(() => this.update());
+    $(room.state).players.onRemove(() => this.update());
     this.update();
   }
 
   update() {
+    if (!this.room) return;
     const count = this.room.state.players.size;
     const me = this.room.state.players.get(this.room.sessionId);
     this.text.setText(
