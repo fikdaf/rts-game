@@ -6,6 +6,7 @@ import { UnitRenderer } from "../rendering/UnitRenderer";
 import { SelectionManager } from "../selection/SelectionManager";
 import { HUDManager } from "../ui/HUDManager";
 import { MobileControls, installMobileStyles } from "../ui/MobileControls";
+import { ActionBar } from "../ui/ActionBar";
 
 export class MainScene extends Phaser.Scene {
   private network!: NetworkManager;
@@ -13,18 +14,16 @@ export class MainScene extends Phaser.Scene {
   private selection!: SelectionManager;
   private inputController!: InputController;
   private hud!: HUDManager;
-  private mobileControls!: MobileControls;
+  private mobileControls?: MobileControls;
+  private actionBar?: ActionBar;
 
-  constructor() {
-    super("MainScene");
-  }
+  constructor() { super("MainScene"); }
 
   async create() {
     new CameraController(this).setup();
     this.network = new NetworkManager();
     this.hud = new HUDManager(this);
     installMobileStyles();
-
     try {
       const room = await this.network.connect(`Player-${Math.floor(Math.random() * 1000)}`);
       this.hud.attachRoom(room);
@@ -34,12 +33,13 @@ export class MainScene extends Phaser.Scene {
       this.hud.bindState();
 
       const moveSelected = (x: number, y: number) => {
-        if (this.selection.selectedUnitIds.size === 0) return;
-        this.network.send("move_units", {
-          unitIds: Array.from(this.selection.selectedUnitIds),
-          x,
-          y,
-        });
+        const ids = Array.from(this.selection.selectedUnitIds);
+        if (!ids.length) return;
+        this.network.send("move_units", { unitIds: ids, x, y });
+      };
+      const buildBase = () => {
+        const p = this.input.activePointer;
+        this.network.send("build_base", { x: p.worldX, y: p.worldY });
       };
 
       this.inputController = new InputController(this, this.selection, {
@@ -50,13 +50,17 @@ export class MainScene extends Phaser.Scene {
 
       this.mobileControls = new MobileControls({
         spawnUnit: () => this.network.send("spawn_unit"),
-        moveSelected: () => {
-          const pointer = this.input.activePointer;
-          if (this.selection.selectedUnitIds.size > 0) moveSelected(pointer.worldX, pointer.worldY);
-        },
+        moveSelected: () => moveSelected(this.input.activePointer.worldX, this.input.activePointer.worldY),
+        buildBase,
         clearSelection: () => this.selection.clear(),
       });
       this.mobileControls.setVisible(true);
+
+      this.actionBar = new ActionBar(this, {
+        spawn: () => this.network.send("spawn_unit"),
+        clear: () => this.selection.clear(),
+      });
+      this.actionBar.create();
     } catch (err) {
       this.hud.setStatus(`Connection failed: ${err}`);
       console.error(err);
@@ -66,5 +70,6 @@ export class MainScene extends Phaser.Scene {
   shutdown() {
     this.inputController?.destroy();
     this.mobileControls?.destroy();
+    this.actionBar?.destroy();
   }
 }
