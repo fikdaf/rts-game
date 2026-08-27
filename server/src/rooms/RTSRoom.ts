@@ -1,118 +1,18 @@
 import { Room, Client } from "colyseus";
 import { GameState, Player, Unit, Building } from "../schema/GameState.js";
 
-const MAX_PLAYERS = 6;
-const TICK_MS = 1000 / 20;
-const SPAWN_COST = 10;
-const BUILD_COST = 50;
-let unitCounter = 0;
-let buildingCounter = 0;
-
-export class RTSRoom extends Room {
-  state = new GameState();
-  maxClients = MAX_PLAYERS;
-
-  onCreate() {
-    this.state.matchStartedAt = Date.now();
-    this.onMessage("move_units", (client, message: { unitIds: string[]; x: number; y: number }) => {
-      if (!Number.isFinite(message.x) || !Number.isFinite(message.y)) return;
-      for (const id of message.unitIds ?? []) {
-        const unit = this.state.units.get(id);
-        if (unit?.ownerId === client.sessionId) {
-          unit.targetX = Math.max(0, Math.min(this.state.mapWidth, message.x));
-          unit.targetY = Math.max(0, Math.min(this.state.mapHeight, message.y));
-        }
-      }
-    });
-
-    this.onMessage("spawn_unit", client => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player || player.resources < SPAWN_COST) return;
-      player.resources -= SPAWN_COST;
-      const unit = new Unit();
-      unit.id = `u_${unitCounter++}`;
-      unit.ownerId = client.sessionId;
-      unit.x = 100 + Math.random() * 1400;
-      unit.y = 100 + Math.random() * 1000;
-      unit.targetX = unit.x;
-      unit.targetY = unit.y;
-      this.state.units.set(unit.id, unit);
-    });
-
-    this.onMessage("build_base", (client, message: { x: number; y: number }) => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player || player.resources < BUILD_COST || !Number.isFinite(message.x) || !Number.isFinite(message.y)) return;
-      player.resources -= BUILD_COST;
-      const building = new Building();
-      building.id = `b_${buildingCounter++}`;
-      building.ownerId = client.sessionId;
-      building.x = Math.max(40, Math.min(this.state.mapWidth - 40, message.x));
-      building.y = Math.max(40, Math.min(this.state.mapHeight - 40, message.y));
-      this.state.buildings.set(building.id, building);
-    });
-
-    this.setSimulationInterval(() => this.tick(TICK_MS / 1000), TICK_MS);
-  }
-
-  tick(dt: number) {
-    this.state.players.forEach(player => {
-      player.resources = Math.min(500, player.resources + 0.5 * dt);
-    });
-
-    this.state.units.forEach(unit => {
-      const dx = unit.targetX - unit.x;
-      const dy = unit.targetY - unit.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 1) {
-        const moveDist = Math.min(unit.speed * dt, dist);
-        unit.x += (dx / dist) * moveDist;
-        unit.y += (dy / dist) * moveDist;
-      }
-      unit.attackCooldown = Math.max(0, unit.attackCooldown - dt);
-    });
-
-    this.state.units.forEach(attacker => {
-      if (attacker.attackCooldown > 0) return;
-      let target: Unit | undefined;
-      let best = Infinity;
-      this.state.units.forEach(candidate => {
-        if (candidate.ownerId === attacker.ownerId || candidate.hp <= 0) return;
-        const d = Math.hypot(candidate.x - attacker.x, candidate.y - attacker.y);
-        if (d <= attacker.attackRange && d < best) { best = d; target = candidate; }
-      });
-      if (target) {
-        target.hp -= attacker.damage;
-        attacker.attackCooldown = 0.75;
-        if (target.hp <= 0) {
-          const victimOwner = this.state.players.get(target.ownerId);
-          const attackerOwner = this.state.players.get(attacker.ownerId);
-          if (attackerOwner) attackerOwner.score += 1;
-          this.state.units.delete(target.id);
-          if (victimOwner) victimOwner.score = Math.max(0, victimOwner.score - 1);
-        }
-      }
-    });
-  }
-
-  onJoin(client: Client, options: { name?: string }) {
-    const player = new Player();
-    player.sessionId = client.sessionId;
-    player.name = options?.name || `Player-${client.sessionId.slice(0, 4)}`;
-    this.state.players.set(client.sessionId, player);
-  }
-
-  onLeave(client: Client) {
-    const player = this.state.players.get(client.sessionId);
-    if (player) player.connected = false;
-    this.clock.setTimeout(() => {
-      const p = this.state.players.get(client.sessionId);
-      if (p && !p.connected) {
-        this.state.players.delete(client.sessionId);
-        this.state.units.forEach((unit, id) => { if (unit.ownerId === client.sessionId) this.state.units.delete(id); });
-        this.state.buildings.forEach((building, id) => { if (building.ownerId === client.sessionId) this.state.buildings.delete(id); });
-      }
-    }, 15000);
-  }
-
-  onDispose() { console.log(`Room ${this.roomId} disposed`); }
-}
+const MAX_PLAYERS=6,TICK_MS=1000/20,SPAWN_COST=10,BUILD_COST=50; let unitCounter=0,buildingCounter=0;
+export class RTSRoom extends Room { state=new GameState(); maxClients=MAX_PLAYERS;
+ onCreate(){ this.state.matchStartedAt=Date.now();
+  this.onMessage("move_units",(c,m:{unitIds?:string[];x:number;y:number})=>{if(this.state.status==="finished"||!Number.isFinite(m.x)||!Number.isFinite(m.y))return;for(const id of m.unitIds??[]){const u=this.state.units.get(id);if(u?.ownerId===c.sessionId){u.targetX=Math.max(0,Math.min(this.state.mapWidth,m.x));u.targetY=Math.max(0,Math.min(this.state.mapHeight,m.y));}}});
+  this.onMessage("spawn_unit",c=>{const p=this.state.players.get(c.sessionId);if(!p||p.eliminated||this.state.status==="finished"||p.resources<SPAWN_COST)return;p.resources-=SPAWN_COST;const b=this.findBase(c.sessionId),u=new Unit();u.id=`u_${unitCounter++}`;u.ownerId=c.sessionId;u.x=b?.x??100;u.y=b?.y??100;u.targetX=u.x;u.targetY=u.y;this.state.units.set(u.id,u)});
+  this.onMessage("build_base",(c,m:{x:number;y:number})=>{const p=this.state.players.get(c.sessionId);if(!p||p.eliminated||this.state.status==="finished"||p.resources<BUILD_COST||!Number.isFinite(m.x)||!Number.isFinite(m.y)||this.hasBuildingNear(m.x,m.y,70))return;p.resources-=BUILD_COST;const b=new Building();b.id=`b_${buildingCounter++}`;b.ownerId=c.sessionId;b.x=Math.max(40,Math.min(this.state.mapWidth-40,m.x));b.y=Math.max(40,Math.min(this.state.mapHeight-40,m.y));this.state.buildings.set(b.id,b)});
+  this.setSimulationInterval(()=>this.tick(TICK_MS/1000),TICK_MS);
+ }
+ private findBase(id:string){for(const b of this.state.buildings.values())if(b.ownerId===id&&b.kind==="base")return b;return undefined}
+ private hasBuildingNear(x:number,y:number,r:number){for(const b of this.state.buildings.values())if(Math.hypot(b.x-x,b.y-y)<r)return true;return false}
+ private checkMatch(){const active=[...this.state.players.values()].filter(p=>p.connected&&!p.eliminated);for(const p of active){const alive=[...this.state.units.values()].some(u=>u.ownerId===p.sessionId)||[...this.state.buildings.values()].some(b=>b.ownerId===p.sessionId&&b.hp>0);if(!alive)p.eliminated=true}const remaining=[...this.state.players.values()].filter(p=>p.connected&&!p.eliminated);if(active.length>=2&&remaining.length===1){this.state.status="finished";this.state.winnerId=remaining[0].sessionId}else if(remaining.length>1)this.state.status="running"}
+ tick(dt:number){if(this.state.status==="finished")return;this.state.players.forEach(p=>{if(!p.eliminated)p.resources=Math.min(500,p.resources+2*dt)});this.state.units.forEach(u=>{const dx=u.targetX-u.x,dy=u.targetY-u.y,d=Math.hypot(dx,dy);if(d>1){const s=Math.min(u.speed*dt,d);u.x+=dx/d*s;u.y+=dy/d*s}u.attackCooldown=Math.max(0,u.attackCooldown-dt)});this.state.units.forEach(a=>{if(a.attackCooldown>0)return;let t:Unit|undefined,best=Infinity;this.state.units.forEach(c=>{if(c.ownerId===a.ownerId||c.hp<=0)return;const d=Math.hypot(c.x-a.x,c.y-a.y);if(d<=a.attackRange&&d<best){best=d;t=c}});if(t){t.hp-=a.damage;a.attackCooldown=.75;if(t.hp<=0){const p=this.state.players.get(a.ownerId);if(p)p.score++;this.state.units.delete(t.id)}}});this.state.buildings.forEach(b=>{if(b.hp<=0)this.state.buildings.delete(b.id)});this.checkMatch()}
+ onJoin(c:Client,o:{name?:string}){const p=new Player();p.sessionId=c.sessionId;p.name=o?.name||`Player-${c.sessionId.slice(0,4)}`;this.state.players.set(c.sessionId,p);const slot=this.state.players.size-1,x=150+(slot%3)*650,y=150+Math.floor(slot/3)*800,b=new Building();b.id=`b_${buildingCounter++}`;b.ownerId=c.sessionId;b.x=x;b.y=y;this.state.buildings.set(b.id,b);const u=new Unit();u.id=`u_${unitCounter++}`;u.ownerId=c.sessionId;u.x=x+55;u.y=y;u.targetX=u.x;u.targetY=u.y;this.state.units.set(u.id,u);this.state.status=this.state.players.size>1?"running":"waiting"}
+ onLeave(c:Client){const p=this.state.players.get(c.sessionId);if(p)p.connected=false;this.clock.setTimeout(()=>{const q=this.state.players.get(c.sessionId);if(q&&!q.connected){this.state.players.delete(c.sessionId);this.state.units.forEach((u,id)=>{if(u.ownerId===c.sessionId)this.state.units.delete(id)});this.state.buildings.forEach((b,id)=>{if(b.ownerId===c.sessionId)this.state.buildings.delete(id)});this.checkMatch()}},15000)}
+ onDispose(){console.log(`Room ${this.roomId} disposed`)} }
