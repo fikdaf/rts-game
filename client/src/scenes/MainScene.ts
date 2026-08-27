@@ -20,11 +20,11 @@ export class MainScene extends Phaser.Scene {
   async create() {
     new CameraController(this).setup();
     this.network = new NetworkManager();
-    this.hud = new HUDManager(this, undefined as never);
+    this.hud = new HUDManager(this);
 
     try {
       const room = await this.network.connect(`Player-${Math.floor(Math.random() * 1000)}`);
-      this.hud = new HUDManager(this, room);
+      this.hud.attachRoom(room);
       this.renderer = new UnitRenderer(this, room);
       this.selection = new SelectionManager(this, room, this.renderer.sprites);
       this.renderer.bindState();
@@ -41,7 +41,6 @@ export class MainScene extends Phaser.Scene {
         spawnUnit: () => this.network.send("spawn_unit"),
       });
       this.inputController.bind();
-      this.hud.setStatus(`Connected. Session: ${room.sessionId}`);
     } catch (err) {
       this.hud.setStatus(`Connection failed: ${err}`);
       console.error(err);
