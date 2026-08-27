@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Client, Room } from "colyseus.js";
+import { Client, Room, getStateCallbacks } from "@colyseus/sdk";
 
 const SERVER_URL = "ws://localhost:2567";
 
@@ -52,18 +52,20 @@ export class MainScene extends Phaser.Scene {
   }
 
   private bindRoomEvents() {
-    this.room.state.units.onAdd((unit: any, id: string) => {
+    const $ = getStateCallbacks(this.room);
+
+    $(this.room.state).units.onAdd((unit: any, id: string) => {
       const isMine = unit.ownerId === this.room.sessionId;
       const circle = this.add.circle(unit.x, unit.y, 10, isMine ? 0x4caf50 : 0xe53935);
       circle.setStrokeStyle(2, 0xffffff);
       this.unitSprites.set(id, { sprite: circle });
 
-      unit.onChange(() => {
+      $(unit).onChange(() => {
         circle.setPosition(unit.x, unit.y);
       });
     });
 
-    this.room.state.units.onRemove((_unit: any, id: string) => {
+    $(this.room.state).units.onRemove((_unit: any, id: string) => {
       const entry = this.unitSprites.get(id);
       entry?.sprite.destroy();
       entry?.label?.destroy();
@@ -71,12 +73,12 @@ export class MainScene extends Phaser.Scene {
       this.selectedUnitIds.delete(id);
     });
 
-    this.room.state.players.onAdd((player: any) => {
+    $(this.room.state).players.onAdd((player: any) => {
       this.updateHud();
-      player.onChange(() => this.updateHud());
+      $(player).onChange(() => this.updateHud());
     });
 
-    this.room.state.players.onRemove(() => this.updateHud());
+    $(this.room.state).players.onRemove(() => this.updateHud());
   }
 
   private updateHud() {

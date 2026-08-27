@@ -19,6 +19,6 @@ app.get("/", (_req, res) => {
   res.send("RTS game server is running.");
 });
 
-httpServer.listen(port, () => {
+gameServer.listen(port).then(() => {
   console.log(`RTS server listening on ws://localhost:${port}`);
 });
