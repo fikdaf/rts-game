@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Room } from "@colyseus/sdk";
+import { Room, getStateCallbacks } from "@colyseus/sdk";
 import { UnitSprite } from "../types/GameTypes";
 
 export class UnitRenderer {
@@ -8,7 +8,7 @@ export class UnitRenderer {
   constructor(private scene: Phaser.Scene, private room: Room) {}
 
   bindState() {
-    const $ = requireStateCallbacks(this.room);
+    const $ = getStateCallbacks(this.room);
     $(this.room.state).units.onAdd((unit: any, id: string) => {
       const isMine = unit.ownerId === this.room.sessionId;
       const circle = this.scene.add.circle(unit.x, unit.y, 10, isMine ? 0x4caf50 : 0xe53935);
@@ -25,9 +25,4 @@ export class UnitRenderer {
     entry?.label?.destroy();
     this.sprites.delete(id);
   }
-}
-
-function requireStateCallbacks(room: Room) {
-  // Kept local so rendering owns state subscription details.
-  return require("@colyseus/sdk").getStateCallbacks(room);
 }
