@@ -46,7 +46,17 @@ export class SelectionManager {
     this.selectStart = undefined;
   }
 
+  unitAt(x: number, y: number, radius = 18): boolean {
+    for (const [id, entry] of this.sprites) {
+      const unit = this.room.state.units.get(id);
+      if (!unit || unit.ownerId !== this.room.sessionId) continue;
+      if (Math.hypot(unit.x - x, unit.y - y) <= radius) return true;
+    }
+    return false;
+  }
+
   clear() {
+    this.selectedUnitIds.forEach(id => this.sprites.get(id)?.sprite.setStrokeStyle(2, 0xffffff));
     this.selectedUnitIds.clear();
     this.selectionRect?.destroy();
     this.selectionRect = undefined;
