@@ -1,3 +1,5 @@
+import Phaser from "phaser";
+
 export interface UnitSprite {
   sprite: Phaser.GameObjects.Arc;
   label?: Phaser.GameObjects.Text;
